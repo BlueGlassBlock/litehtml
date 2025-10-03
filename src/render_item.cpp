@@ -812,11 +812,10 @@ void litehtml::render_item::draw_children(uint_ptr hdc, pixel_t x, pixel_t y, co
 
             border_radiuses bdr_radius = src_el()->css().get_borders().radius.calc_percents(border_box.width,
                                                                                             border_box.height);
-
             bdr_radius -= m_borders;
             bdr_radius -= m_padding;
 
-            doc->container()->set_clip(pos, bdr_radius);
+            doc->container()->set_clip(border_box, bdr_radius);
         }
     }
 
@@ -897,7 +896,10 @@ void litehtml::render_item::draw_children(uint_ptr hdc, pixel_t x, pixel_t y, co
 
     if (src_el()->css().get_overflow() > overflow_visible)
     {
-        doc->container()->del_clip();
+    	if (src_el()->css().get_display() != display_inline)
+    	{
+    		doc->container()->del_clip();
+    	}
     }
 }
 
