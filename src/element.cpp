@@ -26,7 +26,7 @@ position element::get_placement() const
 		auto ri = ri_el.lock();
 		if(ri)
 		{
-			position ri_pos = ri_el.lock()->get_placement();
+			position ri_pos = ri->get_placement();
 			if(is_first)
 			{
 				is_first = false;
@@ -414,6 +414,41 @@ void litehtml::element::reset_counter(const string_id& counter_name_id, const in
 	m_counter_values[counter_name_id] = value;
 }
 
+pixel_t litehtml::element::v_scroll(pixel_t dy) const
+{
+	if(m_renders.empty())
+		return 0;
+	auto ri_el = m_renders.front().lock();
+	if(!ri_el)
+		return 0;
+	return ri_el->v_scroll(dy);
+}
+
+pixel_t litehtml::element::h_scroll(pixel_t dx) const
+{
+	if(m_renders.empty())
+		return 0;
+	auto ri_el = m_renders.front().lock();
+	if(!ri_el)
+		return 0;
+	return ri_el->h_scroll(dx);
+}
+
+void litehtml::element::run_on_renderers(const std::function<bool(const std::shared_ptr<render_item>&)>& func)
+{
+	for(const auto& weak_ri : m_renders)
+	{
+		auto ri = weak_ri.lock();
+		if(ri)
+		{
+			if(!func(ri))
+			{
+				break;
+			}
+		}
+	}
+}
+
 const background* element::get_background(bool /*own_only*/)						LITEHTML_RETURN_FUNC(nullptr)
 void element::add_style( const style& /*style*/)									LITEHTML_EMPTY_FUNC
 void element::select_all(const css_selector& /*selector*/, elements_list& /*res*/)	LITEHTML_EMPTY_FUNC
@@ -457,7 +492,7 @@ bool element::set_class( const char* /*pclass*/, bool /*add*/ )						LITEHTML_RE
 bool element::is_replaced() const													LITEHTML_RETURN_FUNC(false)
 void element::draw(uint_ptr /*hdc*/, pixel_t /*x*/, pixel_t /*y*/, const position */*clip*/, const std::shared_ptr<render_item> &/*ri*/) LITEHTML_EMPTY_FUNC
 void element::draw_background(uint_ptr /*hdc*/, pixel_t /*x*/, pixel_t /*y*/, const position */*clip*/, const std::shared_ptr<render_item> &/*ri*/) LITEHTML_EMPTY_FUNC
-void element::get_text( string& /*text*/ )											LITEHTML_EMPTY_FUNC
+void element::get_text( string& /*text*/ ) const									LITEHTML_EMPTY_FUNC
 void element::parse_attributes()													LITEHTML_EMPTY_FUNC
 int	element::select(const css_selector::vector& /*selector_list*/, bool /*apply_pseudo*/) LITEHTML_RETURN_FUNC(select_no_match)
 int element::select(const string& /*selector*/)										LITEHTML_RETURN_FUNC(select_no_match)

@@ -204,6 +204,8 @@ class html_widget :		public Gtk::Widget,
 {
 	int m_rendered_width = 0;
 	int m_rendered_height = 0;
+	double m_mouse_x = 0;
+	double m_mouse_y = 0;
 	bool m_do_force_redraw_on_adjustment = true;
 	std::mutex m_page_mutex;
 	std::shared_ptr<litebrowser::web_page> 	m_current_page;
@@ -233,15 +235,19 @@ public:
 	void reload();
 
 	std::string get_html_source();
-    long render_measure(int number);
-    long draw_measure(int number);
 	void show_fragment(const std::string& fragment);
 	bool on_close();
-	void dump(litehtml::dumper& cout);
-
 	void open_url(const std::string& url) override;
 
-protected:
+	void run_with_document(const std::function<void(const std::shared_ptr<litehtml::document>)>& func)
+	{
+		auto page = current_page();
+		if(page)
+		{
+			page->run_with_document(func);
+		}
+	}
+
 	// litebrowser::html_host_interface override
 	double get_dpi() override;
 	int get_screen_width() override;
@@ -253,6 +259,8 @@ protected:
 	void scroll_to(int x, int y) override;
 	void get_viewport(litehtml::position& viewport) const override;
 	cairo_surface_t* load_image(const std::string& path) override;
+
+protected:
 
 	void snapshot_vfunc(const Glib::RefPtr<Gtk::Snapshot>& snapshot) override;
 	void on_redraw();
@@ -289,7 +297,7 @@ private:
 	}
 	litebrowser::draw_buffer::draw_page_function_t get_draw_function(const std::shared_ptr<litebrowser::web_page>& page)
 	{
-		return [this, page](cairo_t* cr, int x, int y, const litehtml::position* clip)
+		return [page](cairo_t* cr, int x, int y, const litehtml::position* clip)
 		{
 			if (page)
 			{

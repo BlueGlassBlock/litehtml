@@ -235,6 +235,8 @@ void html_widget::on_button_release_event(int /* n_press */, double x, double y)
 
 void html_widget::on_mouse_move(double x, double y)
 {
+	m_mouse_x = x;
+	m_mouse_y = y;
 	bool restart_timer = true;
 	if(m_hscrollbar->is_visible())
 	{
@@ -339,73 +341,6 @@ void html_widget::update_cursor()
 	}
 }
 
-long html_widget::draw_measure(int number)
-{
-	std::shared_ptr<litebrowser::web_page> page = current_page();
-
-	if(page)
-	{
-		litehtml::position view_port;
-		get_viewport(view_port);
-
-		int width = view_port.width;
-		int height = view_port.height;
-
-		int stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
-		auto image = (unsigned char *) g_malloc(stride * height);
-
-		cairo_surface_t *surface = cairo_image_surface_create_for_data(image, CAIRO_FORMAT_ARGB32, width, height,
-																	   stride);
-		cairo_t *cr = cairo_create(surface);
-
-		litehtml::position pos;
-		pos.width = width;
-		pos.height = height;
-		pos.x = 0;
-		pos.y = 0;
-
-		int x = view_port.x;
-		int y = view_port.y;
-
-		cairo_rectangle(cr, 0, 0, width, height);
-		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_paint(cr);
-		page->draw((litehtml::uint_ptr) cr, -x, -y, &pos);
-		cairo_surface_write_to_png(surface, "/tmp/litebrowser.png");
-
-		auto t1 = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < number; i++)
-		{
-			page->draw((litehtml::uint_ptr) cr, -x, -y, &pos);
-		}
-		auto t2 = std::chrono::high_resolution_clock::now();
-
-		cairo_destroy(cr);
-		cairo_surface_destroy(surface);
-		g_free(image);
-
-		return (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1)).count();
-	}
-	return 0;
-}
-
-long html_widget::render_measure(int number)
-{
-	std::shared_ptr<litebrowser::web_page> page = current_page();
-
-	if(page)
-	{
-		auto t1 = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < number; i++)
-		{
-			page->render(m_draw_buffer.get_width());
-		}
-		auto t2 = std::chrono::high_resolution_clock::now();
-		return (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1)).count();
-	}
-	return -1;
-}
-
 void html_widget::size_allocate_vfunc(int width, int height, int /* baseline */)
 {
 	allocate_scrollbars(width, height);
@@ -499,8 +434,33 @@ void html_widget::on_adjustments_changed()
 
 bool html_widget::on_scroll(double dx, double dy)
 {
-	m_vadjustment->set_value(m_vadjustment->get_value() + dy * 60);
-	m_hadjustment->set_value(m_hadjustment->get_value() + dx * 60);
+	auto page = current_page();
+	if (page)
+	{
+		auto values = page->on_scroll((litehtml::pixel_t) dx * 60, (litehtml::pixel_t) dy * 60,
+									  (int) (m_mouse_x + m_draw_buffer.get_left()),
+									  (int) (m_mouse_y + m_draw_buffer.get_top()), (int) m_mouse_x, (int) m_mouse_y);
+		bool dx_used = false;
+		bool dy_used = false;
+		if(!values.empty())
+		{
+			for(const auto& val : values)
+			{
+				if(val.dx != 0) dx_used = true;
+				if(val.dy != 0) dy_used = true;
+				m_draw_buffer.redraw_area(get_draw_function(current_page()), val.scroll_box.left(), val.scroll_box.top(), val.scroll_box.width, val.scroll_box.height);
+			}
+			queue_draw();
+		}
+		if(!dx_used)
+		{
+			m_hadjustment->set_value(m_hadjustment->get_value() + dx * 60);
+		}
+		if(!dy_used)
+		{
+			m_vadjustment->set_value(m_vadjustment->get_value() + dy * 60);
+		}
+	}
 	return true;
 }
 
@@ -703,15 +663,6 @@ bool html_widget::on_close()
 		m_next_page->stop_loading();
 	}
 	return false;
-}
-
-void html_widget::dump(litehtml::dumper &cout)
-{
-	std::shared_ptr<litebrowser::web_page> page = current_page();
-	if(page)
-	{
-		page->dump(cout);
-	}
 }
 
 void html_widget::go_forward()

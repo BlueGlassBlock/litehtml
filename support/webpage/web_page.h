@@ -1,8 +1,10 @@
 #ifndef LITEBROWSER_WEB_PAGE_H
 #define LITEBROWSER_WEB_PAGE_H
 
+#include <memory>
 #include <unistd.h>
 #include <sstream>
+#include <vector>
 #include "container_cairo_pango.h"
 #include "html_host.h"
 #include "http_requests_pool.h"
@@ -65,7 +67,7 @@ namespace litebrowser
 		litehtml::string				m_url;
 		litehtml::string				m_base_url;
 		litehtml::document::ptr			m_html;
-		std::recursive_mutex			m_html_mutex;
+		mutable std::recursive_mutex	m_html_mutex;
 		litehtml::string				m_cursor;
 		litehtml::string				m_clicked_url;
 		std::string                 	m_fragment;
@@ -138,10 +140,18 @@ namespace litebrowser
 		const std::string& url() const { return m_url; }
 
 		[[nodiscard]]
-		int width() const { return m_html ? m_html->width() : 0; }
+		int width() const
+		{
+			std::lock_guard<std::recursive_mutex> html_lock(m_html_mutex);
+			return m_html ? m_html->width() : 0;
+		}
 
 		[[nodiscard]]
-		int height() const { return m_html ? m_html->height() : 0; }
+		int height() const
+		{
+			std::lock_guard<std::recursive_mutex> html_lock(m_html_mutex);
+			return m_html ? m_html->height() : 0;
+		}
 
 		bool media_changed()
 		{
@@ -168,14 +178,18 @@ namespace litebrowser
 			return m_requests_pool.is_downloading();
 		}
 
-		void dump(litehtml::dumper& cout)
+		std::vector<litehtml::scroll_values> on_scroll(litehtml::pixel_t dx, litehtml::pixel_t dy, int x, int y, int client_x, int client_y)
 		{
 			std::lock_guard<std::recursive_mutex> html_lock(m_html_mutex);
-			if(m_html)
-			{
-				m_html->dump(cout);
-			}
+			return m_html ? m_html->on_scroll(dx, dy, x, y, client_x, client_y) : std::vector<litehtml::scroll_values>();
 		}
+
+		void run_with_document(const std::function<void(const std::shared_ptr<litehtml::document>)>& func)
+		{
+			std::lock_guard<std::recursive_mutex> html_lock(m_html_mutex);
+			if(m_html) func(m_html);
+		}
+
 	private:
 		void http_request(const std::string& url,
 						  const std::function<void(void* data, size_t len, size_t downloaded, size_t total)>& cb_on_data,
